@@ -12,87 +12,160 @@ local AimSettings = {
 	Enabled = false,
 	TeamCheck = true,
 	WallCheck = true,
+	StickyMode = true,
+	ESPEnabled = false,
 	TargetPart = "Head",
-	FOV = 250, -- Starting with a larger, more realistic default
-	Smoothing = 0.25 
+	FOV = 200,
+	Smoothing = 0.25,
+	MaxDistance = 500, -- Default: 500 studs
+	Minimized = false
 }
+
+local CurrentTarget = nil
+local ESP_Objects = {}
+
+-- // UNIVERSAL PART FINDER \\ --
+local function getBodyPart(char)
+	if not char then return nil end
+	if AimSettings.TargetPart == "Head" then
+		return char:FindFirstChild("Head")
+	else
+		return char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
+	end
+end
 
 -- // UI CONSTRUCTION \\ --
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "Precision_Aimbot"
+ScreenGui.Name = "Pro_System_V12"
 ScreenGui.ResetOnSpawn = false
-ScreenGui.DisplayOrder = 999
 ScreenGui.Parent = pgui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 220, 0, 260)
+MainFrame.Size = UDim2.new(0, 220, 0, 520)
 MainFrame.Position = UDim2.new(0, 20, 0.3, 0)
-MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Draggable = true
 MainFrame.Parent = ScreenGui
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
 
-local function createToggle(name, text, pos, callback)
+local MinBtn = Instance.new("TextButton")
+MinBtn.Size = UDim2.new(0, 30, 0, 30)
+MinBtn.Position = UDim2.new(1, -35, 0, 5)
+MinBtn.Text = "-"
+MinBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+MinBtn.TextColor3 = Color3.new(1, 1, 1)
+MinBtn.Parent = MainFrame
+Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 5)
+
+local ContentFrame = Instance.new("Frame")
+ContentFrame.Size = UDim2.new(1, 0, 1, 0)
+ContentFrame.BackgroundTransparency = 1
+ContentFrame.Parent = MainFrame
+
+local function createToggle(text, pos, callback)
 	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(0, 200, 0, 35)
+	btn.Size = UDim2.new(0, 200, 0, 32)
 	btn.Position = pos
 	btn.Text = text
 	btn.Font = Enum.Font.SourceSansBold
 	btn.TextSize = 14
-	btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	btn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 	btn.TextColor3 = Color3.new(1, 1, 1)
-	btn.Parent = MainFrame
+	btn.Parent = ContentFrame
 	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
 	btn.MouseButton1Click:Connect(function() callback(btn) end)
 	return btn
 end
 
-local ToggleBtn = createToggle("Toggle", "Aimbot: OFF", UDim2.new(0, 10, 0, 10), function(btn)
+-- // UI ELEMENTS \\ --
+createToggle("Aimbot: OFF", UDim2.new(0, 10, 0, 40), function(btn)
 	AimSettings.Enabled = not AimSettings.Enabled
+	CurrentTarget = nil
 	btn.Text = AimSettings.Enabled and "Aimbot: ON" or "Aimbot: OFF"
-	btn.BackgroundColor3 = AimSettings.Enabled and Color3.fromRGB(0, 150, 255) or Color3.fromRGB(40, 40, 40)
+	btn.BackgroundColor3 = AimSettings.Enabled and Color3.fromRGB(0, 120, 255) or Color3.fromRGB(35, 35, 35)
 end)
 
-createToggle("Part", "Target: Head", UDim2.new(0, 10, 0, 55), function(btn)
-	AimSettings.TargetPart = (AimSettings.TargetPart == "Head") and "UpperTorso" or "Head"
-	btn.Text = "Target: " .. AimSettings.TargetPart
+createToggle("Sticky Mode: ON", UDim2.new(0, 10, 0, 75), function(btn)
+	AimSettings.StickyMode = not AimSettings.StickyMode
+	CurrentTarget = nil
+	btn.Text = AimSettings.StickyMode and "Sticky Mode: ON" or "Sticky Mode: OFF"
 end)
 
-createToggle("Team", "Team Check: ON", UDim2.new(0, 10, 0, 100), function(btn)
+createToggle("ESP: OFF", UDim2.new(0, 10, 0, 110), function(btn)
+	AimSettings.ESPEnabled = not AimSettings.ESPEnabled
+	btn.Text = AimSettings.ESPEnabled and "ESP: ON" or "ESP: OFF"
+	btn.BackgroundColor3 = AimSettings.ESPEnabled and Color3.fromRGB(180, 0, 255) or Color3.fromRGB(35, 35, 35)
+end)
+
+createToggle("Team Check: ON", UDim2.new(0, 10, 0, 145), function(btn)
 	AimSettings.TeamCheck = not AimSettings.TeamCheck
 	btn.Text = AimSettings.TeamCheck and "Team Check: ON" or "Team Check: OFF"
 end)
 
-createToggle("Wall", "Wall Check: ON", UDim2.new(0, 10, 0, 145), function(btn)
+createToggle("Wall Check: ON", UDim2.new(0, 10, 0, 180), function(btn)
 	AimSettings.WallCheck = not AimSettings.WallCheck
 	btn.Text = AimSettings.WallCheck and "Wall Check: ON" or "Wall Check: OFF"
 end)
 
-local FOVSlider = Instance.new("TextBox")
-FOVSlider.Size = UDim2.new(0, 200, 0, 35)
-FOVSlider.Position = UDim2.new(0, 10, 0, 190)
-FOVSlider.Text = "FOV Radius: " .. AimSettings.FOV
-FOVSlider.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-FOVSlider.TextColor3 = Color3.new(1, 1, 1)
-FOVSlider.Parent = MainFrame
-Instance.new("UICorner", FOVSlider).CornerRadius = UDim.new(0, 6)
+createToggle("Target: Head", UDim2.new(0, 10, 0, 215), function(btn)
+	AimSettings.TargetPart = (AimSettings.TargetPart == "Head") and "Torso" or "Head"
+	btn.Text = "Target: " .. AimSettings.TargetPart
+end)
 
--- Visual FOV Circle (Actually matches the math now)
+local function createInput(text, pos)
+	local box = Instance.new("TextBox")
+	box.Size = UDim2.new(0, 200, 0, 32)
+	box.Position = pos
+	box.Text = text
+	box.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+	box.TextColor3 = Color3.new(1, 1, 1)
+	box.Parent = ContentFrame
+	Instance.new("UICorner", box).CornerRadius = UDim.new(0, 6)
+	return box
+end
+
+local FOVBox = createInput("FOV: " .. AimSettings.FOV, UDim2.new(0, 10, 0, 255))
+local SmoothBox = createInput("Smooth: " .. AimSettings.Smoothing, UDim2.new(0, 10, 0, 295))
+local DistBox = createInput("Max Dist: " .. AimSettings.MaxDistance, UDim2.new(0, 10, 0, 335))
+
 local FOVCircle = Instance.new("Frame")
 FOVCircle.Size = UDim2.new(0, AimSettings.FOV * 2, 0, AimSettings.FOV * 2)
 FOVCircle.AnchorPoint = Vector2.new(0.5, 0.5)
 FOVCircle.Position = UDim2.new(0.5, 0, 0.5, 0)
 FOVCircle.BackgroundTransparency = 0.9
 FOVCircle.BackgroundColor3 = Color3.new(1, 1, 1)
-FOVCircle.BorderSizePixel = 0
 FOVCircle.Parent = ScreenGui
-local circleCorner = Instance.new("UICorner")
-circleCorner.CornerRadius = UDim.new(1, 0)
-circleCorner.Parent = FOVCircle
+Instance.new("UICorner", FOVCircle).CornerRadius = UDim.new(1, 0)
 
--- // LOGIC \\ --
+-- // LOGIC FUNCTIONS \\ --
+
+MinBtn.MouseButton1Click:Connect(function()
+	AimSettings.Minimized = not AimSettings.Minimized
+	ContentFrame.Visible = not AimSettings.Minimized
+	MinBtn.Text = AimSettings.Minimized and "+" or "-"
+	MainFrame.Size = AimSettings.Minimized and UDim2.new(0, 220, 0, 40) or UDim2.new(0, 220, 0, 520)
+end)
+
+-- UPDATE BOX VALUES
+FOVBox.FocusLost:Connect(function() 
+	local n = tonumber(FOVBox.Text:match("%d+%.?%d*"))
+	if n then AimSettings.FOV = n FOVCircle.Size = UDim2.new(0, n*2, 0, n*2) end
+	FOVBox.Text = "FOV: " .. AimSettings.FOV
+end)
+
+SmoothBox.FocusLost:Connect(function() 
+	local n = tonumber(SmoothBox.Text:match("%d+%.?%d*"))
+	if n then AimSettings.Smoothing = math.clamp(n, 0.01, 1) end
+	SmoothBox.Text = "Smooth: " .. AimSettings.Smoothing
+end)
+
+DistBox.FocusLost:Connect(function() 
+	local n = tonumber(DistBox.Text:match("%d+%.?%d*"))
+	if n then AimSettings.MaxDistance = n end
+	DistBox.Text = "Max Dist: " .. AimSettings.MaxDistance
+end)
 
 local function isVisible(targetPart)
 	if not AimSettings.WallCheck then return true end
@@ -103,59 +176,100 @@ local function isVisible(targetPart)
 	return result == nil or result.Instance:IsDescendantOf(targetPart.Parent)
 end
 
-local function getClosestPlayer()
-	local closestPlayer = nil
-	local shortestDistance = AimSettings.FOV -- Only targets within this pixel radius
-
-	-- Get the actual center of the screen
-	local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-
-	for _, p in pairs(Players:GetPlayers()) do
-		if p ~= player and p.Character and p.Character:FindFirstChild(AimSettings.TargetPart) then
-			local hum = p.Character:FindFirstChild("Humanoid")
-			if hum and hum.Health > 0 then
-				if AimSettings.TeamCheck and p.Team == player.Team then continue end
-				
-				local targetPart = p.Character[AimSettings.TargetPart]
-				local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
-				
-				if onScreen then
-					-- Calculate distance from screen center to player's screen position
-					local targetCoord = Vector2.new(screenPos.X, screenPos.Y)
-					local distance = (targetCoord - screenCenter).Magnitude
-					
-					if distance < shortestDistance then
-						if isVisible(targetPart) then
-							shortestDistance = distance
-							closestPlayer = p
-						end
-					end
+local function isValid(p)
+	if p and p.Parent == Players and p.Character and player.Character then
+		local hum = p.Character:FindFirstChild("Humanoid")
+		local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+		local myHrp = player.Character:FindFirstChild("HumanoidRootPart")
+		local targetPart = getBodyPart(p.Character)
+		
+		if hum and hum.Health > 0 and hrp and myHrp and targetPart then
+			-- TEAM CHECK
+			if AimSettings.TeamCheck and p.Team and p.Team == player.Team then return false end
+			
+			-- CRITICAL FIX: ACTUAL DISTANCE CHECK
+			local distance = (myHrp.Position - hrp.Position).Magnitude
+			if distance > AimSettings.MaxDistance then 
+				return false 
+			end
+			
+			-- FOV CHECK
+			local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+			if onScreen then
+				local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+				if (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude <= AimSettings.FOV then
+					return isVisible(targetPart)
 				end
+			end
+		end
+	end
+	return false
+end
+
+local function getNewTarget()
+	local closestPlayer = nil
+	local shortestDistance = AimSettings.FOV
+	local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+	for _, p in pairs(Players:GetPlayers()) do
+		if p ~= player and isValid(p) then
+			local targetPart = getBodyPart(p.Character)
+			local screenPos = Camera:WorldToViewportPoint(targetPart.Position)
+			local distToCenter = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
+			if distToCenter < shortestDistance then
+				shortestDistance = distToCenter
+				closestPlayer = p
 			end
 		end
 	end
 	return closestPlayer
 end
 
-FOVSlider.FocusLost:Connect(function()
-	local val = tonumber(FOVSlider.Text:match("%d+"))
-	if val then
-		AimSettings.FOV = val
-		FOVCircle.Size = UDim2.new(0, val * 2, 0, val * 2)
+-- // RENDER LOOP \\ --
+RunService:BindToRenderStep("FinalSystemV12", Enum.RenderPriority.Camera.Value + 1, function()
+	-- 1. CLEANUP GHOST BOXES
+	for p, obj in pairs(ESP_Objects) do
+		if not p or not p.Parent or not Players:FindFirstChild(p.Name) then
+			if obj then obj:Destroy() end
+			ESP_Objects[p] = nil
+		end
 	end
-	FOVSlider.Text = "FOV Radius: " .. AimSettings.FOV
-end)
 
--- // PERSISTENT LOCK LOOP \\ --
-RunService:BindToRenderStep("PrecisionLock", Enum.RenderPriority.Camera.Value + 1, function()
-	if AimSettings.Enabled then
-		local target = getClosestPlayer()
-		if target and target.Character and target.Character:FindFirstChild(AimSettings.TargetPart) then
-			local targetPos = target.Character[AimSettings.TargetPart].Position
-			
-			-- The "Stickiness" - Smoothly interpolates the camera to the target
-			local lookAt = CFrame.new(Camera.CFrame.Position, targetPos)
-			Camera.CFrame = Camera.CFrame:Lerp(lookAt, AimSettings.Smoothing)
+	-- 2. AIMBOT
+	if AimSettings.Enabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+		if AimSettings.StickyMode then
+			if CurrentTarget and not isValid(CurrentTarget) then CurrentTarget = nil end
+			if not CurrentTarget then CurrentTarget = getNewTarget() end
+		else
+			CurrentTarget = getNewTarget()
+		end
+		
+		if CurrentTarget then
+			local targetPart = getBodyPart(CurrentTarget.Character)
+			if targetPart then
+				Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, targetPart.Position), AimSettings.Smoothing)
+			end
+		end
+	end
+
+	-- 3. ESP
+	for _, p in pairs(Players:GetPlayers()) do
+		local obj = ESP_Objects[p]
+		if AimSettings.ESPEnabled and p ~= player and p.Character and p.Character:FindFirstChild("Humanoid") and p.Character.Humanoid.Health > 0 then
+			if not obj then 
+				local box = Instance.new("BoxHandleAdornment")
+				box.AlwaysOnTop = true
+				box.ZIndex = 10
+				box.Transparency = 0.5
+				box.Parent = pgui
+				ESP_Objects[p] = box
+				obj = box
+			end
+			obj.Adornee = p.Character
+			obj.Size = p.Character:GetExtentsSize()
+			obj.Color3 = (not p.Team and Color3.new(1,1,1)) or (p.Team == player.Team and Color3.new(0,1,0)) or Color3.new(1,0,0)
+			obj.Visible = true
+		elseif obj then
+			obj.Visible = false
 		end
 	end
 end)
